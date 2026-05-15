@@ -1,0 +1,50 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Release Zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Zip Archive
+        run: |
+          mkdir -p App/pico_namer
+          # Copy necessary files to the staging directory
+          cp main.py App/pico_namer/
+          cp launch.sh App/pico_namer/
+          cp icon.png App/pico_namer/
+          cp config.json App/pico_namer/
+          cp -r assets App/pico_namer/
+          cp -r core App/pico_namer/
+          cp -r libs App/pico_namer/
+          
+          # Clean out unnecessary files from libs (like tests) if needed,
+          # but copying the whole directory is generally fine for shrinko8
+          
+          # Create the release zip
+          # Get tag name for the zip filename, default to 'latest' if manual dispatch
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="latest"
+          fi
+          
+          zip -r "pico_namer_${VERSION}.zip" App/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: pico_namer_*.zip
+          generate_release_notes: true
