@@ -1,0 +1,7 @@
+{
+  "label": "PICO-8 Renamer",
+  "icon": "assets/icon.png",
+  "launch": "launch.sh",
+  "rompath": "",
+  "log_level": "INFO"
+}

@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.pyc
+device_runtime.log
+.DS_Store
