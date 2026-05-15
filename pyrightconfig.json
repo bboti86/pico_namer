@@ -1,0 +1,7 @@
+{
+    "extraPaths": [
+        "core",
+        "libs",
+        "libs/shrinko8"
+    ]
+}
