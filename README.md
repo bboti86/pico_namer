@@ -32,6 +32,6 @@ The project includes an `auto_push.py` script for developers to quickly sync cha
 ```
 
 ## 📜 Credits
-- **[shrinko8](https://github.com/this-is-not-a-link/shrinko8)**: Core cart parsing logic.
+- **[shrinko8](https://github.com/thisismypassport/shrinko8)**: Core cart parsing logic.
 - **PySDL2**: Powering the handheld user interface.
 - **Spruce OS Team**: For the wonderful handheld environment.
