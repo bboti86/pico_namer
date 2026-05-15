@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 device_runtime.log
 .DS_Store
+deploy/
+*.p8.png
+inspect_carts.py
+test_sanitize.py

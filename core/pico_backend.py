@@ -16,11 +16,36 @@ def sanitize_filename(name):
     name = re.sub(r'[\\/:*?"<>|]', ' ', name)
     # Remove non-ascii or weird characters that might be in PICO-8 titles
     name = "".join(c for c in name if c.isprintable() or c.isspace())
+    
+    # Strip leading/trailing borders/decorations
+    name = name.strip('-=~_#*+ ')
+    
     # Collapse multiple spaces and strip
     name = re.sub(r'\s+', ' ', name).strip()
+    
     # Capitalize like a book title
     name = string.capwords(name)
     return name
+
+def fallback_title_from_filename(filename):
+    base = filename
+    for ext in ['.p8.png', '.p8']:
+        if base.lower().endswith(ext):
+            base = base[:-len(ext)]
+            break
+            
+    # Check if the filename is just numbers (BBS IDs like 56656)
+    if base.isdigit():
+        return "" # A digit-only title is useless, just skip
+        
+    # Replace dashes and underscores with spaces
+    base = base.replace('-', ' ').replace('_', ' ')
+    
+    # Remove common revision suffixes like "v1", "1 0" at the end
+    base = re.sub(r'\s+v?\d+([ \.]\d+)*$', '', base, flags=re.IGNORECASE)
+    base = re.sub(r'\s+\d+$', '', base)
+    
+    return sanitize_filename(base)
 
 def get_unique_path(directory, filename, ext):
     base_path = os.path.join(directory, f"{filename}{ext}")
@@ -34,7 +59,7 @@ def get_unique_path(directory, filename, ext):
             return new_path
         counter += 1
 
-def run_renamer(target_dirs, progress_queue, dry_run=False):
+def run_renamer(target_dirs, progress_queue, dry_run=False, cancel_event=None):
     files_to_process = []
     
     # Traverse directories
@@ -58,6 +83,10 @@ def run_renamer(target_dirs, progress_queue, dry_run=False):
     failures = []
 
     for index, filepath in enumerate(files_to_process):
+        if cancel_event and cancel_event.is_set():
+            logger.info("Renamer cancelled by user.")
+            return
+
         filename = os.path.basename(filepath)
         dirname = os.path.dirname(filepath)
         ext = '.p8.png' if filename.lower().endswith('.p8.png') else '.p8'
@@ -73,16 +102,29 @@ def run_renamer(target_dirs, progress_queue, dry_run=False):
             
             cart = read_cart(filepath)
             raw_title = cart.title
+            clean_title = ""
             
-            if not raw_title or raw_title.strip() == "":
-                raise Exception("No Lua title comment found")
+            if raw_title and raw_title.strip() != "":
+                # Get the first line of the title if multiline
+                first_line = raw_title.split('\n')[0].strip()
+                clean_title = sanitize_filename(first_line)
                 
-            # Get the first line of the title if multiline
-            first_line = raw_title.split('\n')[0].strip()
-            clean_title = sanitize_filename(first_line)
+            bad_titles = ['todo', 'init', 'game', 'main', 'app', 'globals', 'overall', 'title']
+            if not clean_title or clean_title.lower() in bad_titles:
+                fallback = fallback_title_from_filename(filename)
+                if fallback:
+                    clean_title = fallback
             
             if not clean_title:
-                raise Exception("Sanitized title is empty")
+                progress_queue.put({
+                    "type": "UPDATE",
+                    "index": index + 1,
+                    "total": total,
+                    "msg": f"Skipped (No Title Found): {filename}"
+                })
+                logger.info(f"Skipped (No Title Found): '{filename}'")
+                failures.append(f"{filename} - No valid title found")
+                continue
                 
             # Keep original if it already matches
             if filename == f"{clean_title}{ext}":

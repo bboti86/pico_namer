@@ -35,6 +35,7 @@ target_dirs = [
 ]
 worker_thread = None
 progress_queue = queue.Queue()
+cancel_event = threading.Event()
 
 # Processing state
 current_progress = 0
@@ -54,12 +55,18 @@ def change_state(new_state):
         log_messages = []
         success_count = 0
         failure_messages = []
+        while not progress_queue.empty():
+            try:
+                progress_queue.get_nowait()
+            except queue.Empty:
+                break
 
 def start_processing(dry_run):
     global worker_thread, log_messages
     log_messages = ["Starting " + ("Dry Run..." if dry_run else "Renamer...")]
+    cancel_event.clear()
     change_state(STATE_PROCESSING)
-    worker_thread = threading.Thread(target=run_renamer, args=(target_dirs, progress_queue, dry_run), daemon=True)
+    worker_thread = threading.Thread(target=run_renamer, args=(target_dirs, progress_queue, dry_run, cancel_event), daemon=True)
     worker_thread.start()
 
 def main():
@@ -113,8 +120,9 @@ def main():
                         
                 elif app_state == STATE_PROCESSING:
                     if action == input_handlers.CANCEL:
-                        logger.info("User requested Exit during Processing")
-                        running = False
+                        logger.info("User requested Cancel during Processing")
+                        cancel_event.set()
+                        change_state(STATE_DASHBOARD)
                         
                 elif app_state == STATE_SUMMARY:
                     if action == input_handlers.CANCEL or action == input_handlers.ACCEPT:
@@ -152,7 +160,8 @@ def main():
             render_text(renderer, font_medium, "Target Directories:", 40, y_pos, (200, 200, 200))
             for tdir in target_dirs:
                 y_pos += 30
-                render_text(renderer, font_small, tdir, 60, y_pos, (100, 255, 100))
+                color = (100, 255, 100) if os.path.exists(tdir) else (255, 100, 100)
+                render_text(renderer, font_small, tdir, 60, y_pos, color)
             
             render_text(renderer, font_medium, "This utility will parse PICO-8 titles", 40, y_pos + 60, (200, 200, 200))
             render_text(renderer, font_medium, "and safely rename files so they look nicer.", 40, y_pos + 90, (200, 200, 200))
@@ -174,7 +183,7 @@ def main():
                 y_pos += 25
 
             # Footer
-            render_text(renderer, font_small, "[B]: Exit Application", WIDTH//2, HEIGHT - 30, (150, 150, 150), center=True)
+            render_text(renderer, font_small, "[B]: Cancel & Return to Dashboard", WIDTH//2, HEIGHT - 30, (150, 150, 150), center=True)
 
         elif app_state == STATE_SUMMARY:
             draw_panel(renderer, 20, 20, WIDTH - 40, HEIGHT - 80)
